@@ -104,26 +104,41 @@ impl RendezvousMediator {
     }
 
     pub async fn start_all() {
-        crate::test_nat_type();
+        // LAN-only mode: skip all public server connections
+        log::info!("Starting in LAN-only mode, no public server connections");
+        
+        // Skip NAT type testing (requires public servers)
+        // crate::test_nat_type();
+        
         if config::is_outgoing_only() {
             loop {
                 sleep(1.).await;
             }
         }
-        crate::hbbs_http::sync::start();
+        
+        // Skip hbbs_http sync (requires public API server)
+        // crate::hbbs_http::sync::start();
+        
         #[cfg(target_os = "windows")]
         if crate::platform::is_installed() && crate::is_server() {
-            crate::updater::start_auto_update();
+            // Skip auto update check (requires public servers)
+            // crate::updater::start_auto_update();
         }
+        
         check_zombie();
         let server = new_server();
-        if config::option2bool("stop-service", &Config::get_option("stop-service")) {
-            crate::test_rendezvous_server();
-        }
+        
+        // Skip rendezvous server testing
+        // if config::option2bool("stop-service", &Config::get_option("stop-service")) {
+        //     crate::test_rendezvous_server();
+        // }
+        
         let server_cloned = server.clone();
         tokio::spawn(async move {
             direct_server(server_cloned).await;
         });
+        
+        // Start LAN discovery service - this is the core of LAN-only mode
         #[cfg(target_os = "android")]
         let start_lan_listening = true;
         #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -133,6 +148,7 @@ impl RendezvousMediator {
                 allow_err!(super::lan::start_listening());
             });
         }
+        
         // It is ok to run xdesktop manager when the headless function is not allowed.
         #[cfg(target_os = "linux")]
         if crate::is_server() {
@@ -140,51 +156,11 @@ impl RendezvousMediator {
         }
         scrap::codec::test_av1();
         *LAST_NOT_DEPLOYED_REGISTER.lock().await = None;
+        
+        // In LAN-only mode, we don't connect to any rendezvous servers
+        // Just keep the direct server and LAN discovery running
         loop {
-            let timeout = Arc::new(RwLock::new(CONNECT_TIMEOUT));
-            let conn_start_time = Instant::now();
-            *SOLVING_PK_MISMATCH.lock().await = "".to_owned();
-            if !config::option2bool("stop-service", &Config::get_option("stop-service"))
-                && !crate::platform::installing_service()
-            {
-                let mut futs = Vec::new();
-                let servers = Config::get_rendezvous_servers();
-                SHOULD_EXIT.store(false, Ordering::SeqCst);
-                MANUAL_RESTARTED.store(false, Ordering::SeqCst);
-                for host in servers.clone() {
-                    let server = server.clone();
-                    let timeout = timeout.clone();
-                    futs.push(tokio::spawn(async move {
-                        if let Err(err) = Self::start(server, host).await {
-                            let err = format!("rendezvous mediator error: {err}");
-                            // When user reboot, there might be below error, waiting too long
-                            // (CONNECT_TIMEOUT 18s) will make user think there is bug
-                            if err.contains("10054") || err.contains("11001") {
-                                // No such host is known. (os error 11001)
-                                // An existing connection was forcibly closed by the remote host. (os error 10054): also happens for UDP
-                                *timeout.write().unwrap() = 3000;
-                            }
-                            log::error!("{err}");
-                        }
-                        // SHOULD_EXIT here is to ensure once one exits, the others also exit.
-                        SHOULD_EXIT.store(true, Ordering::SeqCst);
-                    }));
-                }
-                join_all(futs).await;
-            } else {
-                server.write().unwrap().close_connections();
-            }
-            Config::reset_online();
-            let timeout = *timeout.read().unwrap();
-            if !MANUAL_RESTARTED.load(Ordering::SeqCst) {
-                let elapsed = conn_start_time.elapsed().as_millis() as u64;
-                if elapsed < timeout {
-                    sleep(((timeout - elapsed) / 1000) as _).await;
-                }
-            } else {
-                // https://github.com/rustdesk/rustdesk/issues/12233
-                sleep(0.033).await;
-            }
+            sleep(60.).await; // Sleep indefinitely, keeping LAN services alive
         }
     }
 

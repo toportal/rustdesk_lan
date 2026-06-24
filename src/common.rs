@@ -575,51 +575,54 @@ impl Drop for CheckTestNatType {
     fn drop(&mut self) {
         let is_direct = Config::get_socks().is_none() && !config::use_ws();
         if self.is_direct != is_direct {
-            test_nat_type();
+            // LAN-only mode: skip NAT type testing (requires public servers)
+            // test_nat_type();
         }
     }
 }
 
 pub fn test_nat_type() {
-    test_ipv6_sync();
-    use std::sync::atomic::{AtomicBool, Ordering};
-    std::thread::spawn(move || {
-        static IS_RUNNING: AtomicBool = AtomicBool::new(false);
-        if IS_RUNNING.load(Ordering::SeqCst) {
-            return;
-        }
-        IS_RUNNING.store(true, Ordering::SeqCst);
-
-        #[cfg(not(any(target_os = "android", target_os = "ios")))]
-        crate::ipc::get_socks_ws();
-        let is_direct = Config::get_socks().is_none() && !config::use_ws();
-        if !is_direct {
-            Config::set_nat_type(NatType::SYMMETRIC as _);
-            IS_RUNNING.store(false, Ordering::SeqCst);
-            return;
-        }
-
-        let mut i = 0;
-        loop {
-            match test_nat_type_() {
-                Ok(true) => break,
-                Err(err) => {
-                    log::error!("test nat: {}", err);
-                }
-                _ => {}
-            }
-            if Config::get_nat_type() != 0 {
-                break;
-            }
-            i = i * 2 + 1;
-            if i > 300 {
-                i = 300;
-            }
-            std::thread::sleep(std::time::Duration::from_secs(i));
-        }
-
-        IS_RUNNING.store(false, Ordering::SeqCst);
-    });
+    // LAN-only mode: skip NAT type testing (requires public servers)
+    log::info!("NAT type testing disabled in LAN-only mode");
+    // test_ipv6_sync();
+    // use std::sync::atomic::{AtomicBool, Ordering};
+    // std::thread::spawn(move || {
+    //     static IS_RUNNING: AtomicBool = AtomicBool::new(false);
+    //     if IS_RUNNING.load(Ordering::SeqCst) {
+    //         return;
+    //     }
+    //     IS_RUNNING.store(true, Ordering::SeqCst);
+    //
+    //     #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    //     crate::ipc::get_socks_ws();
+    //     let is_direct = Config::get_socks().is_none() && !config::use_ws();
+    //     if !is_direct {
+    //         Config::set_nat_type(NatType::SYMMETRIC as _);
+    //         IS_RUNNING.store(false, Ordering::SeqCst);
+    //         return;
+    //     }
+    //
+    //     let mut i = 0;
+    //     loop {
+    //         match test_nat_type_() {
+    //             Ok(true) => break,
+    //             Err(err) => {
+    //                 log::error!("test nat: {}", err);
+    //             }
+    //             _ => {}
+    //         }
+    //         if Config::get_nat_type() != 0 {
+    //             break;
+    //         }
+    //         i = i * 2 + 1;
+    //         if i > 300 {
+    //             i = 300;
+    //         }
+    //         std::thread::sleep(std::time::Duration::from_secs(i));
+    //     }
+    //
+    //     IS_RUNNING.store(false, Ordering::SeqCst);
+    // });
 }
 
 #[tokio::main(flavor = "current_thread")]
@@ -766,18 +769,22 @@ async fn test_rendezvous_server_() {
 
 // #[cfg(any(target_os = "android", target_os = "ios", feature = "cli"))]
 pub fn test_rendezvous_server() {
-    std::thread::spawn(test_rendezvous_server_);
+    // LAN-only mode: skip rendezvous server testing (no public servers)
+    log::info!("Rendezvous server testing disabled in LAN-only mode");
+    // std::thread::spawn(test_rendezvous_server_);
 }
 
 pub fn refresh_rendezvous_server() {
-    #[cfg(any(target_os = "android", target_os = "ios", feature = "cli"))]
-    test_rendezvous_server();
-    #[cfg(not(any(target_os = "android", target_os = "ios", feature = "cli")))]
-    std::thread::spawn(|| {
-        if crate::ipc::test_rendezvous_server().is_err() {
-            test_rendezvous_server();
-        }
-    });
+    // LAN-only mode: skip rendezvous server refresh (no public servers)
+    log::info!("Rendezvous server refresh disabled in LAN-only mode");
+    // #[cfg(any(target_os = "android", target_os = "ios", feature = "cli"))]
+    // test_rendezvous_server();
+    // #[cfg(not(any(target_os = "android", target_os = "ios", feature = "cli")))]
+    // std::thread::spawn(|| {
+    //     if crate::ipc::test_rendezvous_server().is_err() {
+    //         test_rendezvous_server();
+    //     }
+    // });
 }
 
 pub fn run_me<T: AsRef<std::ffi::OsStr>>(args: Vec<T>) -> std::io::Result<std::process::Child> {

@@ -30,7 +30,9 @@ pub fn update_controlling_session_count(count: usize) {
 
 #[allow(dead_code)]
 pub fn start_auto_update() {
-    let _sender = TX_MSG.lock().unwrap();
+    // LAN-only mode: skip auto update check (no public server connections)
+    log::info!("Auto update check disabled in LAN-only mode");
+    // let _sender = TX_MSG.lock().unwrap();
 }
 
 #[allow(dead_code)]

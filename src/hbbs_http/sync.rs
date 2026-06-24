@@ -26,12 +26,21 @@ lazy_static::lazy_static! {
 
 #[cfg(not(any(target_os = "ios")))]
 pub fn start() {
-    let _sender = SENDER.lock().unwrap();
+    // LAN-only mode: skip hbbs sync (no public server connections)
+    log::info!("hbbs_http::sync::start() called but skipped in LAN-only mode");
+    // Don't start the sync thread in LAN-only mode
+    // let _sender = SENDER.lock().unwrap();
 }
 
 #[cfg(not(target_os = "ios"))]
 pub fn signal_receiver() -> broadcast::Receiver<Vec<i32>> {
-    SENDER.lock().unwrap().subscribe()
+    // LAN-only mode: return a dummy receiver that never receives anything
+    // This is used by connection.rs to wait for disconnect signals from hbbs
+    // In LAN-only mode, we don't need this functionality
+    let (tx, rx) = broadcast::channel::<Vec<i32>>(16);
+    // Keep tx alive to prevent the receiver from returning errors
+    std::mem::forget(tx);
+    rx
 }
 
 #[cfg(not(any(target_os = "ios")))]
