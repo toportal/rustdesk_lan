@@ -80,21 +80,34 @@ loop {
 - **`get_id()` 函数**：重写为返回本地 IP 地址而不是设备 ID
 
 **实现逻辑：**
-1. 优先从配置中读取 `local-ip-addr`（由 LAN 发现服务设置）
-2. 如果未设置，尝试通过建立 TCP 连接到外部地址获取本地接口 IP
-3. 如果都失败，回退到 `127.0.0.1`
+1. **Android/iOS**：通过 TCP 连接获取本地接口 IP
+2. **Desktop (Windows/macOS/Linux)**：通过 IPC 调用 `ipc::get_id()` 获取本地 IP
 
-**平台适配：**
-- **Android/iOS**：直接使用 TCP 连接方式获取本地 IP
-- **Desktop (Windows/macOS/Linux)**：优先使用配置中的 `local-ip-addr`
-
-**用户界面影响：**
-- Flutter UI 中显示的设备 ID 现在显示为本地 IP 地址（如 `192.168.1.100`）
-- 用户可以通过 IP 地址直接连接局域网内的其他设备
+**关键发现：**
+- 在桌面平台上，UI 进程通过 IPC 从服务进程获取 ID
+- 因此必须同时修改 `src/ipc.rs` 中的 IPC 服务端和客户端代码
 
 ---
 
-### 6. `src/server/connection.rs` - 无需修改 ✅
+### 6. `src/ipc.rs` - IPC 层 ID 返回本地 IP ✅
+
+**修改内容：**
+- **新增 `get_local_ip()` 函数**：统一的本地 IP 获取逻辑
+  1. 优先从配置中读取 `local-ip-addr`（由 LAN 发现服务设置）
+  2. 通过 TCP 连接检测本地接口 IP
+  3. 遍历网络接口获取非回环 IPv4 地址
+  4. 回退到 `127.0.0.1`
+- **修改 `get_id()` 函数**：直接调用 `get_local_ip()` 返回本地 IP
+- **修改 IPC 配置处理**：当 UI 请求 `"id"` 配置时，返回 `get_local_ip()` 而不是 `Config::get_id()`
+
+**影响范围：**
+- Flutter UI 通过 `bind.mainGetMyId()` 获取的 ID 现在是本地 IP
+- UI 状态更新中的 ID 也是本地 IP
+- 解决了界面显示"正在生成"的问题
+
+---
+
+### 7. `src/server/connection.rs` - 无需修改 ✅
 
 **说明：**
 - 该文件中使用了 `hbbs_rx.recv()` 来等待来自 HBBS 的断开信号
@@ -353,6 +366,7 @@ cargo build --release --features flutter
 3. 修改 UI 显示本地 IP 地址
 4. 禁用自动更新和网络诊断
 5. 保持核心远程控制功能完整
+6. 修复 IPC 层 ID 返回，确保界面正确显示本地 IP
 
 ⚠️ **注意事项**：
 - 纯内网模式适用于封闭网络环境
@@ -370,3 +384,17 @@ cargo build --release --features flutter
 **修改日期**：2026-06-24  
 **版本**：RustDesk 1.4.7 (LAN-only Mode)  
 **修改者**：AI Assistant
+
+---
+
+## 修改文件清单
+
+| 文件路径 | 修改内容 | 状态 |
+|---------|---------|------|
+| `src/rendezvous_mediator.rs` | 移除公网汇合服务器连接 | ✅ |
+| `src/hbbs_http/sync.rs` | 禁用 HTTP 同步服务 | ✅ |
+| `src/updater.rs` | 禁用自动更新检查 | ✅ |
+| `src/common.rs` | 禁用 NAT 测试和服务器测试 | ✅ |
+| `src/ui_interface.rs` | get_id() 返回本地 IP | ✅ |
+| `src/ipc.rs` | IPC 层 ID 返回本地 IP | ✅ |
+| `src/server/connection.rs` | 无需修改（hbbs 信号已禁用） | ✅ |

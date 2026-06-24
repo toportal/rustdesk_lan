@@ -104,19 +104,8 @@ pub fn get_id() -> String {
     }
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     {
-        // For desktop platforms, get local IP from config (set by LAN discovery)
-        let local_ip = Config::get_option("local-ip-addr");
-        if !local_ip.is_empty() {
-            return local_ip;
-        }
-        // Fallback: try to detect local IP
-        use std::net::TcpStream;
-        if let Ok(stream) = TcpStream::connect("8.8.8.8:53") {
-            if let Ok(local_addr) = stream.local_addr() {
-                return local_addr.ip().to_string();
-            }
-        }
-        return "127.0.0.1".to_string();
+        // For desktop platforms, get local IP via IPC (same as ipc::get_id)
+        return ipc::get_id();
     }
 }
 

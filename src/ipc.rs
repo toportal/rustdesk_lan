@@ -826,7 +826,8 @@ async fn handle(data: Data, stream: &mut Connection) {
             None => {
                 let value;
                 if name == "id" {
-                    value = Some(Config::get_id());
+                    // LAN-only mode: return local IP instead of device ID
+                    value = Some(crate::ipc::get_local_ip());
                 } else if name == "temporary-password" {
                     value = Some(password::temporary_password());
                 } else if name == "permanent-password-storage-and-salt" {
@@ -1688,20 +1689,37 @@ pub fn clear_trusted_devices() {
     allow_err!(set_data(&Data::ClearTrustedDevices));
 }
 
-pub fn get_id() -> String {
-    if let Ok(Some(v)) = get_config("id") {
-        // update salt also, so that next time reinstallation not causing first-time auto-login failure
-        if let Ok(Some(v2)) = get_config("salt") {
-            Config::set_salt(&v2);
-        }
-        if v != Config::get_id() {
-            Config::set_key_confirmed(false);
-            Config::set_id(&v);
-        }
-        v
-    } else {
-        Config::get_id()
+/// Get local IP address for LAN-only mode
+pub fn get_local_ip() -> String {
+    // First try to get from config (set by LAN discovery)
+    let local_ip = Config::get_option("local-ip-addr");
+    if !local_ip.is_empty() {
+        return local_ip;
     }
+    // Fallback: detect local IP by connecting to an external address
+    use std::net::TcpStream;
+    if let Ok(stream) = TcpStream::connect("8.8.8.8:53") {
+        if let Ok(local_addr) = stream.local_addr() {
+            let ip = local_addr.ip().to_string();
+            // Cache it in config for future use
+            Config::set_option("local-ip-addr".to_owned(), ip.clone());
+            return ip;
+        }
+    }
+    // Last resort: try to enumerate network interfaces
+    for interface in default_net::get_interfaces() {
+        for ipv4 in &interface.ipv4 {
+            if !ipv4.addr.is_loopback() && !ipv4.addr.is_link_local() {
+                return ipv4.addr.to_string();
+            }
+        }
+    }
+    "127.0.0.1".to_string()
+}
+
+pub fn get_id() -> String {
+    // LAN-only mode: return local IP address instead of device ID
+    get_local_ip()
 }
 
 pub async fn get_rendezvous_server(ms_timeout: u64) -> (String, Vec<String>) {
