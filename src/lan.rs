@@ -41,7 +41,11 @@ pub(super) fn start_listening() -> ResultType<()> {
                                 &Config::get_option("enable-lan-discovery"),
                             )
                         {
-                            let id = Config::get_id();
+                            // LAN-only mode: use local IP as ID for consistency with UI display
+                            #[cfg(any(target_os = "android", target_os = "ios"))]
+                            let id = crate::ui_interface::get_id();
+                            #[cfg(not(any(target_os = "android", target_os = "ios")))]
+                            let id = crate::ipc::get_local_ip();
                             if p.id == id {
                                 continue;
                             }
