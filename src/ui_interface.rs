@@ -91,15 +91,22 @@ const INIT_ASYNC_JOB_STATUS: &str = " ";
 #[inline]
 pub fn get_id() -> String {
     // LAN-only mode: return local IP address instead of device ID
-    #[cfg(any(target_os = "android", target_os = "ios"))]
+    #[cfg(target_os = "android")]
     {
-        // For mobile platforms, get local IP from network interface
-        use std::net::TcpStream;
-        if let Ok(stream) = TcpStream::connect("8.8.8.8:53") {
-            if let Ok(local_addr) = stream.local_addr() {
-                return local_addr.ip().to_string();
+        // For Android, get local IP from network interfaces (no external connections)
+        for interface in default_net::get_interfaces() {
+            for ipv4 in &interface.ipv4 {
+                if !ipv4.addr.is_loopback() && !ipv4.addr.is_link_local() {
+                    return ipv4.addr.to_string();
+                }
             }
         }
+        return "127.0.0.1".to_string();
+    }
+    #[cfg(target_os = "ios")]
+    {
+        // iOS: default_net has build issues on iOS simulator; return fallback
+        // TODO: find a reliable way to get local IP on iOS without external connections
         return "127.0.0.1".to_string();
     }
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
