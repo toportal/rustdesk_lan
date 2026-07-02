@@ -1691,25 +1691,18 @@ pub fn clear_trusted_devices() {
 
 /// Get local IP address for LAN-only mode
 pub fn get_local_ip() -> String {
+    // LAN-only mode: return local IP address without any external connections
     // First try to get from config (set by LAN discovery)
     let local_ip = Config::get_option("local-ip-addr");
     if !local_ip.is_empty() {
         return local_ip;
     }
-    // Fallback: detect local IP by connecting to an external address
-    use std::net::TcpStream;
-    if let Ok(stream) = TcpStream::connect("8.8.8.8:53") {
-        if let Ok(local_addr) = stream.local_addr() {
-            let ip = local_addr.ip().to_string();
-            // Cache it in config for future use
-            Config::set_option("local-ip-addr".to_owned(), ip.clone());
-            return ip;
-        }
-    }
-    // Last resort: try to enumerate network interfaces
+    // Enumerate network interfaces to find a suitable IPv4 address
     for interface in default_net::get_interfaces() {
         for ipv4 in &interface.ipv4 {
             if !ipv4.addr.is_loopback() && !ipv4.addr.is_link_local() {
+                // Cache it in config for future use
+                Config::set_option("local-ip-addr".to_owned(), ipv4.addr.to_string());
                 return ipv4.addr.to_string();
             }
         }
