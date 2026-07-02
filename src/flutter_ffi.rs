@@ -1748,7 +1748,9 @@ pub fn main_get_last_remote_id() -> String {
 }
 
 pub fn main_get_software_update_url() {
-    crate::common::check_software_update();
+    // LAN-only mode: skip software update check (requires public server)
+    log::info!("Software update check disabled in LAN-only mode");
+    // crate::common::check_software_update();
 }
 
 pub fn main_get_home_dir() -> String {
